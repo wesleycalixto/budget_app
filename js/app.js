@@ -94,10 +94,8 @@ function render(){
   app.innerHTML = `
     <div class="topbar">
       <div class="brand">
-        <div class="brand-mark">O</div>
         <div class="brand-text">
-          <h1>Gerador de Orçamentos</h1>
-          <span>SOLUÇÕES EM TECNOLOGIA </span>
+          <h1>Budget App</h1>
         </div>
       </div>
       <div class="tabs no-print">
@@ -124,7 +122,7 @@ function renderList(root){
   if(state.quotes.length===0){
     root.innerHTML = `
       <div class="panel empty-state">
-        <div class="icon">🧾</div>
+        <div class="icon"></div>
         <p style="font-size:15px;color:var(--navy);font-weight:600;margin-bottom:6px;">Nenhum orçamento salvo ainda</p>
         <p style="margin-bottom:18px;">Crie seu primeiro orçamento preenchendo o formulário.</p>
         <button class="btn btn-primary" id="empty-new">Criar orçamento</button>
@@ -197,7 +195,7 @@ function renderForm(root){
   const q = state.current;
   root.innerHTML = `
     <div class="panel">
-      <h2>Logo da empresa</h2>
+      <h2>Sua Logo</h2>
       <div class="logo-row">
         <div class="logo-preview" id="logo-preview">
           ${q.prestador.logo ? `<img src="${q.prestador.logo}" alt="Logo">` : `<span>Sem logo</span>`}
