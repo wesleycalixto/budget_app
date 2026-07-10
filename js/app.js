@@ -227,7 +227,11 @@ function renderForm(root){
       <h2>Cliente</h2>
       <div class="grid2">
         <div class="field"><label>Cliente / Razão Social</label><input id="f-c-nome" type="text" value="${esc(q.cliente.nome)}" placeholder="Nome do cliente ou empresa"></div>
-        <div class="field"><label>CNPJ/CPF</label><input id="f-c-doc" type="text" value="${esc(q.cliente.doc)}" placeholder="000.000.000-00"></div>
+        <div class="field">
+          <label>CNPJ/CPF</label>
+          <input id="f-c-doc" type="text" value="${esc(q.cliente.doc)}" placeholder="00.000.000/0000-00" maxlength="18">
+          <span class="doc-status" id="c-doc-status"></span>
+        </div>
         <div class="field"><label>A/C (Responsável)</label><input id="f-c-resp" type="text" value="${esc(q.cliente.responsavel)}" placeholder="Nome do responsável"></div>
         <div class="field"><label>E-mail</label><input id="f-c-email" type="email" value="${esc(q.cliente.email)}" placeholder="cliente@email.com"></div>
       </div>
@@ -288,10 +292,12 @@ function renderForm(root){
   };
   bind('#f-p-empresa','prestador.empresa'); bind('#f-p-cnpj','prestador.cnpj');
   bind('#f-p-contato','prestador.contato'); bind('#f-p-telefone','prestador.telefone');
-  bind('#f-c-nome','cliente.nome'); bind('#f-c-doc','cliente.doc');
+  bind('#f-c-nome','cliente.nome');
   bind('#f-c-resp','cliente.responsavel'); bind('#f-c-email','cliente.email');
   bind('#f-data','dataEmissao'); bind('#f-validade','validadeDias'); bind('#f-prazo','prazoEstimado');
   bind('#f-termos','termos'); bind('#f-desconto','desconto');
+
+  setupDocLookup(q);
 
   bindItemRows();
   updateTotalsUI();
@@ -415,6 +421,78 @@ function setPath(obj, path, value){
 }
 function esc(s){
   return (s??'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function onlyDigits(s){ return (s||'').replace(/\D/g,''); }
+
+function maskDoc(raw){
+  const d = onlyDigits(raw).slice(0,14);
+  if(d.length <= 11){
+    // CPF mask: 000.000.000-00
+    return d
+      .replace(/(\d{3})(\d)/,'$1.$2')
+      .replace(/(\d{3})(\d)/,'$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+  }
+  // CNPJ mask: 00.000.000/0000-00
+  return d
+    .replace(/(\d{2})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d)/,'$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/,'$1-$2');
+}
+
+async function lookupCNPJ(cnpj){
+  const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+  if(!res.ok){
+    if(res.status===404) throw new Error('CNPJ não encontrado');
+    throw new Error('Falha ao consultar a BrasilAPI');
+  }
+  return res.json();
+}
+
+function setupDocLookup(q){
+  const input = $('#f-c-doc');
+  const status = $('#c-doc-status');
+  if(!input) return;
+  let debounceTimer = null;
+
+  // initial mask on load
+  input.value = maskDoc(q.cliente.doc);
+
+  input.addEventListener('input', (e)=>{
+    const masked = maskDoc(e.target.value);
+    e.target.value = masked;
+    q.cliente.doc = masked;
+    clearTimeout(debounceTimer);
+
+    const digits = onlyDigits(masked);
+    if(digits.length !== 14){
+      status.textContent = '';
+      status.className = 'doc-status';
+      return;
+    }
+    status.textContent = 'Buscando dados na Receita...';
+    status.className = 'doc-status loading';
+
+    debounceTimer = setTimeout(async ()=>{
+      try{
+        const data = await lookupCNPJ(digits);
+        const nome = data.nome_fantasia && data.nome_fantasia.trim() ? data.nome_fantasia : data.razao_social;
+        if(nome){
+          q.cliente.nome = nome;
+          const nomeInput = $('#f-c-nome');
+          if(nomeInput) nomeInput.value = nome;
+        }
+        status.textContent = `✓ ${data.razao_social || nome}`;
+        status.className = 'doc-status success';
+        showToast('Dados do CNPJ preenchidos automaticamente');
+      }catch(err){
+        status.textContent = err.message || 'Não foi possível buscar o CNPJ';
+        status.className = 'doc-status error';
+      }
+    }, 500);
+  });
 }
 
 function processLogoFile(file){
